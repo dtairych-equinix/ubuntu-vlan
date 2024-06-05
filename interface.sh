@@ -2,23 +2,15 @@
 
 # Function to reload network interfaces
 reload_interfaces() {
-    if [ -f /etc/network/interfaces ]; then
-        source_file="/etc/network/interfaces"
-    elif [ -d /etc/network/interfaces.d ]; then
-        source_file="/etc/network/interfaces.d/*"
-    else
-        echo "Error: Unable to find network interface configuration files."
-        return 1
-    fi
-
-    # Reload network interfaces
-    if /etc/init.d/networking reload; then
+    # Reload systemd-networkd
+    if systemctl restart systemd-networkd; then
         echo "Network interfaces reloaded successfully."
     else
         echo "Failed to reload network interfaces."
     fi
 }
 
+# Function to create a sub-interface on a specific VLAN and configure it
 create_subinterface() {
     read -p "Enter the parent interface (e.g., eth0): " parent_interface
     read -p "Enter the VLAN ID: " vlan_id
@@ -42,20 +34,29 @@ create_subinterface() {
         read -p "Enter the default gateway: " gateway
     fi
 
-    # Write the sub-interface configuration to the interfaces file
-    config_file="/etc/network/interfaces.d/${sub_interface}.cfg"
+    # Write the sub-interface configuration to the systemd-networkd files
+    config_file="/etc/systemd/network/${sub_interface}.netdev"
     {
-        echo "auto $sub_interface"
-        if [[ "$manual_ip" =~ ^[Yy]$ ]]; then
-            echo "iface $sub_interface inet static"
-            echo "    address $ip_address"
-            echo "    netmask $subnet_mask"
-            echo "    gateway $gateway"
-        else
-            echo "iface $sub_interface inet dhcp"
-        fi
-        echo "    vlan-raw-device $parent_interface"
+        echo "[NetDev]"
+        echo "Name=$sub_interface"
+        echo "Kind=vlan"
+        echo "  [VLAN]"
+        echo "  Id=$vlan_id"
     } > "$config_file"
+
+    config_file="/etc/systemd/network/${sub_interface}.network"
+    {
+        echo "[Match]"
+        echo "Name=$sub_interface"
+        if [[ "$manual_ip" =~ ^[Yy]$ ]]; then
+            echo "[Network]"
+            echo "Address=$ip_address/$subnet_mask"
+            echo "Gateway=$gateway"
+        else
+            echo "[Network]"
+            echo "DHCP=yes"
+        fi
+    } >> "$config_file"
 
     echo "Sub-interface $sub_interface created and configured."
     echo "Configuration written to $config_file"
@@ -77,14 +78,19 @@ remove_subinterface() {
     # Remove the sub-interface
     ip link delete dev "$sub_interface"
 
-    # Remove the sub-interface configuration file
-    config_file="/etc/network/interfaces.d/${sub_interface}.cfg"
-    if [ -f "$config_file" ]; then
-        rm "$config_file"
-        echo "Sub-interface $sub_interface removed, configuration file $config_file deleted."
-    else
-        echo "Sub-interface $sub_interface removed."
+    # Remove the sub-interface configuration files
+    netdev_config_file="/etc/systemd/network/${sub_interface}.netdev"
+    network_config_file="/etc/systemd/network/${sub_interface}.network"
+
+    if [ -f "$netdev_config_file" ]; then
+        rm "$netdev_config_file"
     fi
+
+    if [ -f "$network_config_file" ]; then
+        rm "$network_config_file"
+    fi
+
+    echo "Sub-interface $sub_interface removed, configuration files deleted."
 
     # Reload network interfaces
     reload_interfaces
