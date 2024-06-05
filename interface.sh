@@ -16,10 +16,14 @@ create_subinterface() {
     ip link add link "$parent_interface" name "$sub_interface" type vlan id "$vlan_id"
     ip link set dev "$sub_interface" up
 
-    # Configure the sub-interface for DHCP
-    dhclient "$sub_interface"
+    # Write the sub-interface configuration to the interfaces file
+    config_file="/etc/network/interfaces.d/${sub_interface}.cfg"
+    echo "auto $sub_interface" > "$config_file"
+    echo "iface $sub_interface inet dhcp" >> "$config_file"
+    echo "vlan-raw-device $parent_interface" >> "$config_file"
 
     echo "Sub-interface $sub_interface created and configured for DHCP."
+    echo "Configuration written to $config_file"
 }
 
 # Function to remove a sub-interface configuration
@@ -35,7 +39,14 @@ remove_subinterface() {
     # Remove the sub-interface
     ip link delete dev "$sub_interface"
 
-    echo "Sub-interface $sub_interface removed."
+    # Remove the sub-interface configuration file
+    config_file="/etc/network/interfaces.d/${sub_interface}.cfg"
+    if [ -f "$config_file" ]; then
+        rm "$config_file"
+        echo "Sub-interface $sub_interface removed, configuration file $config_file deleted."
+    else
+        echo "Sub-interface $sub_interface removed."
+    fi
 }
 
 # Main menu
