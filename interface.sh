@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Function to create a sub-interface on a specific VLAN and configure it for DHCP
+# Function to create a sub-interface on a specific VLAN and configure it
 create_subinterface() {
     read -p "Enter the parent interface (e.g., eth0): " parent_interface
     read -p "Enter the VLAN ID: " vlan_id
@@ -16,13 +16,28 @@ create_subinterface() {
     ip link add link "$parent_interface" name "$sub_interface" type vlan id "$vlan_id"
     ip link set dev "$sub_interface" up
 
+    # Prompt for IP configuration method
+    read -p "Configure IP address manually (y/n)? " manual_ip
+    if [[ "$manual_ip" =~ ^[Yy]$ ]]; then
+        read -p "Enter the IP address: " ip_address
+        read -p "Enter the subnet mask: " subnet_mask
+        read -p "Enter the default gateway: " gateway
+    fi
+
     # Write the sub-interface configuration to the interfaces file
     config_file="/etc/network/interfaces.d/${sub_interface}.cfg"
     echo "auto $sub_interface" > "$config_file"
-    echo "iface $sub_interface inet dhcp" >> "$config_file"
+    if [[ "$manual_ip" =~ ^[Yy]$ ]]; then
+        echo "iface $sub_interface inet static" >> "$config_file"
+        echo "address $ip_address" >> "$config_file"
+        echo "netmask $subnet_mask" >> "$config_file"
+        echo "gateway $gateway" >> "$config_file"
+    else
+        echo "iface $sub_interface inet dhcp" >> "$config_file"
+    fi
     echo "vlan-raw-device $parent_interface" >> "$config_file"
 
-    echo "Sub-interface $sub_interface created and configured for DHCP."
+    echo "Sub-interface $sub_interface created and configured."
     echo "Configuration written to $config_file"
 }
 
@@ -52,7 +67,7 @@ remove_subinterface() {
 # Main menu
 while true; do
     echo "Select an option:"
-    echo "1. Create a sub-interface on a specific VLAN and configure it for DHCP"
+    echo "1. Create a sub-interface on a specific VLAN and configure it"
     echo "2. Remove a sub-interface configuration"
     echo "3. Exit"
     read -p "Enter your choice (1-3): " choice
