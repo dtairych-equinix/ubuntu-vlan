@@ -30,7 +30,7 @@ create_subinterface() {
     read -p "Configure IP address manually (y/n)? " manual_ip
     if [[ "$manual_ip" =~ ^[Yy]$ ]]; then
         read -p "Enter the IP address: " ip_address
-        read -p "Enter the subnet mask: " subnet_mask
+        read -p "Enter the subnet mask (CIDR eg. 24 for 255.255.255.0): " subnet_mask
         read -p "Enter the default gateway: " gateway
     fi
 
