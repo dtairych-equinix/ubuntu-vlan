@@ -1,6 +1,24 @@
 #!/bin/bash
 
-# Function to create a sub-interface on a specific VLAN and configure it
+# Function to reload network interfaces
+reload_interfaces() {
+    if [ -f /etc/network/interfaces ]; then
+        source_file="/etc/network/interfaces"
+    elif [ -d /etc/network/interfaces.d ]; then
+        source_file="/etc/network/interfaces.d/*"
+    else
+        echo "Error: Unable to find network interface configuration files."
+        return 1
+    fi
+
+    # Reload network interfaces
+    if /etc/init.d/networking reload; then
+        echo "Network interfaces reloaded successfully."
+    else
+        echo "Failed to reload network interfaces."
+    fi
+}
+
 create_subinterface() {
     read -p "Enter the parent interface (e.g., eth0): " parent_interface
     read -p "Enter the VLAN ID: " vlan_id
@@ -26,19 +44,24 @@ create_subinterface() {
 
     # Write the sub-interface configuration to the interfaces file
     config_file="/etc/network/interfaces.d/${sub_interface}.cfg"
-    echo "auto $sub_interface" > "$config_file"
-    if [[ "$manual_ip" =~ ^[Yy]$ ]]; then
-        echo "iface $sub_interface inet static" >> "$config_file"
-        echo "address $ip_address" >> "$config_file"
-        echo "netmask $subnet_mask" >> "$config_file"
-        echo "gateway $gateway" >> "$config_file"
-    else
-        echo "iface $sub_interface inet dhcp" >> "$config_file"
-    fi
-    echo "vlan-raw-device $parent_interface" >> "$config_file"
+    {
+        echo "auto $sub_interface"
+        if [[ "$manual_ip" =~ ^[Yy]$ ]]; then
+            echo "iface $sub_interface inet static"
+            echo "    address $ip_address"
+            echo "    netmask $subnet_mask"
+            echo "    gateway $gateway"
+        else
+            echo "iface $sub_interface inet dhcp"
+        fi
+        echo "    vlan-raw-device $parent_interface"
+    } > "$config_file"
 
     echo "Sub-interface $sub_interface created and configured."
     echo "Configuration written to $config_file"
+
+    # Reload network interfaces
+    reload_interfaces
 }
 
 # Function to remove a sub-interface configuration
@@ -62,6 +85,9 @@ remove_subinterface() {
     else
         echo "Sub-interface $sub_interface removed."
     fi
+
+    # Reload network interfaces
+    reload_interfaces
 }
 
 # Main menu
